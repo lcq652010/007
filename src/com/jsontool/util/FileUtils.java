@@ -9,13 +9,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.jsontool.util.JsonConstants.*;
+
 public class FileUtils {
-    private static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
-    private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
     public FileReadResult readFile(String filePath) {
         File file = new File(filePath);
@@ -34,11 +33,11 @@ public class FileUtils {
         try {
             fis = new FileInputStream(file);
             
-            byte[] bomBuffer = new byte[3];
+            byte[] bomBuffer = new byte[UTF8_BOM.length];
             int bomRead = fis.read(bomBuffer);
             boolean hasBom = false;
             
-            if (bomRead >= 3) {
+            if (bomRead >= UTF8_BOM.length) {
                 if (bomBuffer[0] == UTF8_BOM[0] && 
                     bomBuffer[1] == UTF8_BOM[1] && 
                     bomBuffer[2] == UTF8_BOM[2]) {
@@ -50,13 +49,13 @@ public class FileUtils {
             fis = new FileInputStream(file);
             
             if (hasBom) {
-                fis.skip(3);
+                fis.skip(UTF8_BOM.length);
             }
             
             reader = new BufferedReader(new InputStreamReader(fis, DEFAULT_CHARSET));
             
             StringBuilder content = new StringBuilder();
-            char[] buffer = new char[4096];
+            char[] buffer = new char[MIN_BUFFER_SIZE];
             int read;
             while ((read = reader.read(buffer)) != -1) {
                 content.append(buffer, 0, read);
@@ -64,7 +63,7 @@ public class FileUtils {
             
             String result = content.toString();
             
-            if (result.length() > 0 && result.charAt(0) == '\uFEFF') {
+            if (result.length() > 0 && result.charAt(0) == BOM_CHAR) {
                 result = result.substring(1);
             }
             
@@ -109,7 +108,7 @@ public class FileUtils {
             }
             
             writer = new BufferedWriter(new OutputStreamWriter(
-                new FileOutputStream(file), StandardCharsets.UTF_8));
+                new FileOutputStream(file), DEFAULT_CHARSET));
             
             writer.write(content);
             return new FileWriteResult(true, "写入成功: " + filePath);
@@ -152,7 +151,7 @@ public class FileUtils {
         for (File file : files) {
             if (file.isDirectory()) {
                 findJsonFiles(file, jsonFiles);
-            } else if (file.getName().toLowerCase().endsWith(".json")) {
+            } else if (file.getName().toLowerCase().endsWith(JSON_EXTENSION)) {
                 jsonFiles.add(file.getAbsolutePath());
             }
         }

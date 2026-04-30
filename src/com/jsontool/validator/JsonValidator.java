@@ -126,6 +126,13 @@ public class JsonValidator {
     }
 
     private String formatErrorWithChar(int pos, String message, char foundChar) {
+        if (foundChar == '/') {
+            String commentType = checkForComment(pos);
+            if (commentType != null) {
+                return formatError(pos, "JSON 不支持注释。发现 " + commentType);
+            }
+        }
+        
         String charRepr;
         if (Character.isISOControl(foundChar) || Character.isWhitespace(foundChar)) {
             switch (foundChar) {
@@ -140,6 +147,20 @@ public class JsonValidator {
             charRepr = "'" + foundChar + "'";
         }
         return formatError(pos, message + "，实际发现: " + charRepr);
+    }
+
+    private String checkForComment(int pos) {
+        if (pos + 1 >= length) {
+            return null;
+        }
+        
+        char nextChar = json.charAt(pos + 1);
+        if (nextChar == '/') {
+            return "单行注释 (//)";
+        } else if (nextChar == '*') {
+            return "块注释 (/* */)";
+        }
+        return null;
     }
 
     private void skipWhitespace() {
