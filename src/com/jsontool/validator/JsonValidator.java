@@ -3,6 +3,8 @@ package com.jsontool.validator;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.jsontool.util.JsonConstants.*;
+
 public class JsonValidator {
     private int position;
     private String json;
@@ -54,7 +56,7 @@ public class JsonValidator {
     private void calculateLineStartPositions() {
         lineStartPositions.add(0);
         for (int i = 0; i < length; i++) {
-            if (json.charAt(i) == '\n') {
+            if (json.charAt(i) == LF) {
                 lineStartPositions.add(i + 1);
             }
         }
@@ -93,7 +95,7 @@ public class JsonValidator {
         if (lineNumber < lineStartPositions.size()) {
             endPos = lineStartPositions.get(lineNumber) - 1;
         }
-        while (endPos > startPos && (json.charAt(endPos - 1) == '\r' || json.charAt(endPos - 1) == '\n')) {
+        while (endPos > startPos && (json.charAt(endPos - 1) == CR || json.charAt(endPos - 1) == LF)) {
             endPos--;
         }
         return json.substring(startPos, endPos);
@@ -135,13 +137,18 @@ public class JsonValidator {
         
         String charRepr;
         if (Character.isISOControl(foundChar) || Character.isWhitespace(foundChar)) {
-            switch (foundChar) {
-                case '\n': charRepr = "\\n"; break;
-                case '\r': charRepr = "\\r"; break;
-                case '\t': charRepr = "\\t"; break;
-                case '\b': charRepr = "\\b"; break;
-                case '\f': charRepr = "\\f"; break;
-                default: charRepr = String.format("\\u%04x", (int) foundChar);
+            if (foundChar == LF) {
+                charRepr = ESC_NEWLINE;
+            } else if (foundChar == CR) {
+                charRepr = ESC_RETURN;
+            } else if (foundChar == TAB) {
+                charRepr = ESC_TAB;
+            } else if (foundChar == CHAR_BACKSPACE) {
+                charRepr = ESC_BACKSPACE;
+            } else if (foundChar == CHAR_FORMFEED) {
+                charRepr = ESC_FORMFEED;
+            } else {
+                charRepr = String.format(UNICODE_ESCAPE_FORMAT, (int) foundChar);
             }
         } else {
             charRepr = "'" + foundChar + "'";
@@ -156,9 +163,9 @@ public class JsonValidator {
         
         char nextChar = json.charAt(pos + 1);
         if (nextChar == '/') {
-            return "单行注释 (//)";
+            return "单行注释 " + SINGLE_LINE_COMMENT_START;
         } else if (nextChar == '*') {
-            return "块注释 (/* */)";
+            return "块注释 " + BLOCK_COMMENT_START + BLOCK_COMMENT_END;
         }
         return null;
     }
@@ -166,7 +173,7 @@ public class JsonValidator {
     private void skipWhitespace() {
         while (position < length) {
             char c = json.charAt(position);
-            if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            if (c == SPACE || c == TAB || c == LF || c == CR) {
                 position++;
             } else {
                 break;
@@ -283,12 +290,12 @@ public class JsonValidator {
             parseString();
         } else if (c == '-' || (c >= '0' && c <= '9')) {
             parseNumber();
-        } else if (json.startsWith("true", position)) {
-            position += 4;
-        } else if (json.startsWith("false", position)) {
-            position += 5;
-        } else if (json.startsWith("null", position)) {
-            position += 4;
+        } else if (json.startsWith(JSON_TRUE, position)) {
+            position += JSON_TRUE.length();
+        } else if (json.startsWith(JSON_FALSE, position)) {
+            position += JSON_FALSE.length();
+        } else if (json.startsWith(JSON_NULL, position)) {
+            position += JSON_NULL.length();
         } else {
             throw new JsonValidationException(formatErrorWithChar(position, "发现无效值起始字符", c));
         }
@@ -325,38 +332,30 @@ public class JsonValidator {
         char c = json.charAt(position);
         position++;
         
-        switch (c) {
-            case '"':
-            case '\\':
-            case '/':
-            case 'b':
-            case 'f':
-            case 'n':
-            case 'r':
-            case 't':
-                break;
-            case 'u':
-                parseUnicodeEscape();
-                break;
-            default:
-                throw new JsonValidationException(formatError(escapeStartPos, "发现无效转义序列: \\" + c));
+        if (c == STRING_DELIMITER || c == ESCAPE_CHAR || c == '/' ||
+            c == 'b' || c == 'f' || c == 'n' || c == 'r' || c == 't') {
+            // 有效的转义字符
+        } else if (c == UNICODE_ESCAPE_PREFIX) {
+            parseUnicodeEscape();
+        } else {
+            throw new JsonValidationException(formatError(escapeStartPos, "发现无效转义序列: \\" + c));
         }
     }
 
     private void parseUnicodeEscape() throws JsonValidationException {
         int unicodeStartPos = position - 2;
-        if (position + 3 >= length) {
-            throw new JsonValidationException(formatError(unicodeStartPos, "Unicode转义序列不完整，需要4个十六进制数字"));
+        if (position + UNICODE_ESCAPE_LENGTH - 1 >= length) {
+            throw new JsonValidationException(formatError(unicodeStartPos, "Unicode转义序列不完整，需要" + UNICODE_ESCAPE_LENGTH + "个十六进制数字"));
         }
         
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < UNICODE_ESCAPE_LENGTH; i++) {
             char c = json.charAt(position + i);
             if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
                 throw new JsonValidationException(formatErrorWithChar(position + i, "Unicode转义序列中发现无效字符", c));
             }
         }
         
-        position += 4;
+        position += UNICODE_ESCAPE_LENGTH;
     }
 
     private void parseNumber() throws JsonValidationException {

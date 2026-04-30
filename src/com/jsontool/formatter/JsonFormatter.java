@@ -3,8 +3,19 @@ package com.jsontool.formatter;
 import java.util.List;
 import java.util.Map;
 
+import static com.jsontool.util.JsonConstants.*;
+
 public class JsonFormatter {
-    private static final String DEFAULT_INDENT = "    ";
+    private static final String DEFAULT_INDENT;
+    
+    static {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < DEFAULT_INDENT_SIZE; i++) {
+            sb.append(SPACE);
+        }
+        DEFAULT_INDENT = sb.toString();
+    }
+    
     private final String indent;
 
     public JsonFormatter() {
@@ -14,7 +25,7 @@ public class JsonFormatter {
     public JsonFormatter(int indentSize) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < indentSize; i++) {
-            sb.append(' ');
+            sb.append(SPACE);
         }
         this.indent = sb.toString();
     }
@@ -35,7 +46,7 @@ public class JsonFormatter {
 
     private void formatValue(Object value, StringBuilder result, int level) throws JsonFormatException {
         if (value == null) {
-            result.append("null");
+            result.append(JSON_NULL);
         } else if (value instanceof Map) {
             formatObject((Map<String, Object>) value, result, level);
         } else if (value instanceof List) {
@@ -45,7 +56,7 @@ public class JsonFormatter {
         } else if (value instanceof Number) {
             result.append(value.toString());
         } else if (value instanceof Boolean) {
-            result.append(((Boolean) value).toString());
+            result.append(((Boolean) value).booleanValue() ? JSON_TRUE : JSON_FALSE);
         } else {
             throw new JsonFormatException("不支持的类型: " + value.getClass().getName());
         }
@@ -53,44 +64,44 @@ public class JsonFormatter {
 
     private void formatObject(Map<String, Object> obj, StringBuilder result, int level) throws JsonFormatException {
         if (obj.isEmpty()) {
-            result.append("{}");
+            result.append(EMPTY_OBJECT);
             return;
         }
 
-        result.append("{\n");
+        result.append(OBJECT_START).append(NEWLINE);
         int newLevel = level + 1;
         boolean first = true;
 
         for (Map.Entry<String, Object> entry : obj.entrySet()) {
             if (!first) {
-                result.append(",\n");
+                result.append(VALUE_SEPARATOR_PRETTY);
             }
             first = false;
 
             addIndent(result, newLevel);
             formatString(entry.getKey(), result);
-            result.append(": ");
+            result.append(KEY_VALUE_SEPARATOR_PRETTY);
             formatValue(entry.getValue(), result, newLevel);
         }
 
-        result.append('\n');
+        result.append(LF);
         addIndent(result, level);
-        result.append('}');
+        result.append(OBJECT_END);
     }
 
     private void formatArray(List<Object> array, StringBuilder result, int level) throws JsonFormatException {
         if (array.isEmpty()) {
-            result.append("[]");
+            result.append(EMPTY_ARRAY);
             return;
         }
 
-        result.append("[\n");
+        result.append(ARRAY_START).append(NEWLINE);
         int newLevel = level + 1;
         boolean first = true;
 
         for (Object item : array) {
             if (!first) {
-                result.append(",\n");
+                result.append(VALUE_SEPARATOR_PRETTY);
             }
             first = false;
 
@@ -98,45 +109,37 @@ public class JsonFormatter {
             formatValue(item, result, newLevel);
         }
 
-        result.append('\n');
+        result.append(LF);
         addIndent(result, level);
-        result.append(']');
+        result.append(ARRAY_END);
     }
 
     private void formatString(String str, StringBuilder result) {
-        result.append('"');
+        result.append(STRING_DELIMITER);
         for (char c : str.toCharArray()) {
-            switch (c) {
-                case '"':
-                    result.append("\\\"");
-                    break;
-                case '\\':
-                    result.append("\\\\");
-                    break;
-                case '\b':
-                    result.append("\\b");
-                    break;
-                case '\f':
-                    result.append("\\f");
-                    break;
-                case '\n':
-                    result.append("\\n");
-                    break;
-                case '\r':
-                    result.append("\\r");
-                    break;
-                case '\t':
-                    result.append("\\t");
-                    break;
-                default:
-                    if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) {
-                        result.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        result.append(c);
-                    }
+            if (c == STRING_DELIMITER) {
+                result.append(ESC_DOUBLE_QUOTE);
+            } else if (c == ESCAPE_CHAR) {
+                result.append(ESC_BACKSLASH);
+            } else if (c == CHAR_BACKSPACE) {
+                result.append(ESC_BACKSPACE);
+            } else if (c == CHAR_FORMFEED) {
+                result.append(ESC_FORMFEED);
+            } else if (c == CHAR_NEWLINE) {
+                result.append(ESC_NEWLINE);
+            } else if (c == CHAR_RETURN) {
+                result.append(ESC_RETURN);
+            } else if (c == CHAR_TAB) {
+                result.append(ESC_TAB);
+            } else {
+                if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) {
+                    result.append(String.format(UNICODE_ESCAPE_FORMAT, (int) c));
+                } else {
+                    result.append(c);
+                }
             }
         }
-        result.append('"');
+        result.append(STRING_DELIMITER);
     }
 
     private void addIndent(StringBuilder result, int level) {
@@ -161,7 +164,7 @@ public class JsonFormatter {
 
     private void formatValueMinified(Object value, StringBuilder result) throws JsonFormatException {
         if (value == null) {
-            result.append("null");
+            result.append(JSON_NULL);
         } else if (value instanceof Map) {
             formatObjectMinified((Map<String, Object>) value, result);
         } else if (value instanceof List) {
@@ -171,7 +174,7 @@ public class JsonFormatter {
         } else if (value instanceof Number) {
             result.append(value.toString());
         } else if (value instanceof Boolean) {
-            result.append(((Boolean) value).toString());
+            result.append(((Boolean) value).booleanValue() ? JSON_TRUE : JSON_FALSE);
         } else {
             throw new JsonFormatException("不支持的类型: " + value.getClass().getName());
         }
@@ -179,46 +182,46 @@ public class JsonFormatter {
 
     private void formatObjectMinified(Map<String, Object> obj, StringBuilder result) throws JsonFormatException {
         if (obj.isEmpty()) {
-            result.append("{}");
+            result.append(EMPTY_OBJECT);
             return;
         }
 
-        result.append('{');
+        result.append(OBJECT_START);
         boolean first = true;
 
         for (Map.Entry<String, Object> entry : obj.entrySet()) {
             if (!first) {
-                result.append(',');
+                result.append(VALUE_SEPARATOR);
             }
             first = false;
 
             formatString(entry.getKey(), result);
-            result.append(':');
+            result.append(KEY_VALUE_SEPARATOR);
             formatValueMinified(entry.getValue(), result);
         }
 
-        result.append('}');
+        result.append(OBJECT_END);
     }
 
     private void formatArrayMinified(List<Object> array, StringBuilder result) throws JsonFormatException {
         if (array.isEmpty()) {
-            result.append("[]");
+            result.append(EMPTY_ARRAY);
             return;
         }
 
-        result.append('[');
+        result.append(ARRAY_START);
         boolean first = true;
 
         for (Object item : array) {
             if (!first) {
-                result.append(',');
+                result.append(VALUE_SEPARATOR);
             }
             first = false;
 
             formatValueMinified(item, result);
         }
 
-        result.append(']');
+        result.append(ARRAY_END);
     }
 
     public static class FormatResult {
