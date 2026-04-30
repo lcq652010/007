@@ -1,11 +1,13 @@
 package com.jsontool.validator;
 
-import java.util.Stack;
+import java.util.ArrayList;
+import java.util.List;
 
 public class JsonValidator {
     private int position;
     private String json;
     private int length;
+    private List<Integer> lineStartPositions;
 
     public ValidationResult validate(String jsonString) {
         if (jsonString == null || jsonString.trim().isEmpty()) {
@@ -15,6 +17,8 @@ public class JsonValidator {
         this.json = jsonString;
         this.length = jsonString.length();
         this.position = 0;
+        this.lineStartPositions = new ArrayList<Integer>();
+        calculateLineStartPositions();
         
         try {
             skipWhitespace();
@@ -30,19 +34,112 @@ public class JsonValidator {
             } else if (firstChar == '[') {
                 parseArray();
             } else {
-                return new ValidationResult(false, "JSON必须以'{'或'['开头");
+                return new ValidationResult(false, 
+                    formatError(position, "JSON必须以'{'或'['开头，实际发现: '" + firstChar + "'"));
             }
             
             skipWhitespace();
             
             if (position < length) {
-                return new ValidationResult(false, "在位置 " + position + " 发现多余的字符: " + json.charAt(position));
+                return new ValidationResult(false, 
+                    formatError(position, "发现多余的字符: '" + json.charAt(position) + "'"));
             }
             
             return new ValidationResult(true, "JSON语法有效");
         } catch (JsonValidationException e) {
             return new ValidationResult(false, e.getMessage());
         }
+    }
+
+    private void calculateLineStartPositions() {
+        lineStartPositions.add(0);
+        for (int i = 0; i < length; i++) {
+            if (json.charAt(i) == '\n') {
+                lineStartPositions.add(i + 1);
+            }
+        }
+    }
+
+    private int getLineNumber(int pos) {
+        int line = 1;
+        for (int i = 0; i < lineStartPositions.size(); i++) {
+            if (lineStartPositions.get(i) <= pos) {
+                line = i + 1;
+            } else {
+                break;
+            }
+        }
+        return line;
+    }
+
+    private int getColumnNumber(int pos) {
+        int lineStart = 0;
+        for (int i = 0; i < lineStartPositions.size(); i++) {
+            if (lineStartPositions.get(i) <= pos) {
+                lineStart = lineStartPositions.get(i);
+            } else {
+                break;
+            }
+        }
+        return pos - lineStart + 1;
+    }
+
+    private String getLineContent(int lineNumber) {
+        if (lineNumber < 1 || lineNumber > lineStartPositions.size()) {
+            return "";
+        }
+        int startPos = lineStartPositions.get(lineNumber - 1);
+        int endPos = length;
+        if (lineNumber < lineStartPositions.size()) {
+            endPos = lineStartPositions.get(lineNumber) - 1;
+        }
+        while (endPos > startPos && (json.charAt(endPos - 1) == '\r' || json.charAt(endPos - 1) == '\n')) {
+            endPos--;
+        }
+        return json.substring(startPos, endPos);
+    }
+
+    private String formatError(int pos, String message) {
+        int line = getLineNumber(pos);
+        int column = getColumnNumber(pos);
+        String lineContent = getLineContent(line);
+        
+        StringBuilder result = new StringBuilder();
+        result.append("第 ").append(line).append(" 行, 第 ").append(column).append(" 列: ");
+        result.append(message);
+        
+        if (lineContent.length() > 0) {
+            result.append("\n\n    ");
+            result.append(lineContent);
+            result.append("\n    ");
+            for (int i = 0; i < column - 1; i++) {
+                if (i < lineContent.length() && lineContent.charAt(i) == '\t') {
+                    result.append('\t');
+                } else {
+                    result.append(' ');
+                }
+            }
+            result.append('^');
+        }
+        
+        return result.toString();
+    }
+
+    private String formatErrorWithChar(int pos, String message, char foundChar) {
+        String charRepr;
+        if (Character.isISOControl(foundChar) || Character.isWhitespace(foundChar)) {
+            switch (foundChar) {
+                case '\n': charRepr = "\\n"; break;
+                case '\r': charRepr = "\\r"; break;
+                case '\t': charRepr = "\\t"; break;
+                case '\b': charRepr = "\\b"; break;
+                case '\f': charRepr = "\\f"; break;
+                default: charRepr = String.format("\\u%04x", (int) foundChar);
+            }
+        } else {
+            charRepr = "'" + foundChar + "'";
+        }
+        return formatError(pos, message + "，实际发现: " + charRepr);
     }
 
     private void skipWhitespace() {
@@ -62,7 +159,7 @@ public class JsonValidator {
         skipWhitespace();
         
         if (position >= length) {
-            throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 '}'");
+            throw new JsonValidationException(formatError(position, "意外到达字符串末尾，缺少 '}'"));
         }
         
         if (json.charAt(position) == '}') {
@@ -73,12 +170,12 @@ public class JsonValidator {
         while (true) {
             skipWhitespace();
             if (position >= length) {
-                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，期望键名");
+                throw new JsonValidationException(formatError(position, "意外到达字符串末尾，期望键名"));
             }
             parseString();
             skipWhitespace();
             if (position >= length) {
-                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，期望 ':'");
+                throw new JsonValidationException(formatError(position, "意外到达字符串末尾，期望 ':'"));
             }
             expectChar(':');
             position++;
@@ -87,7 +184,7 @@ public class JsonValidator {
             skipWhitespace();
             
             if (position >= length) {
-                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 '}'");
+                throw new JsonValidationException(formatError(position, "意外到达字符串末尾，缺少 '}'"));
             }
             
             if (json.charAt(position) == '}') {
@@ -97,13 +194,13 @@ public class JsonValidator {
                 position++;
                 skipWhitespace();
                 if (position >= length) {
-                    throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 '}'");
+                    throw new JsonValidationException(formatError(position, "意外到达字符串末尾，缺少 '}'"));
                 }
                 if (json.charAt(position) == '}') {
-                    throw new JsonValidationException("在位置 " + position + " 发现尾随逗号");
+                    throw new JsonValidationException(formatError(position, "发现尾随逗号"));
                 }
             } else {
-                throw new JsonValidationException("在位置 " + position + " 期望 '}' 或 ',' 但发现 '" + json.charAt(position) + "'");
+                throw new JsonValidationException(formatErrorWithChar(position, "期望 '}' 或 ','", json.charAt(position)));
             }
         }
     }
@@ -114,7 +211,7 @@ public class JsonValidator {
         skipWhitespace();
         
         if (position >= length) {
-            throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 ']'");
+            throw new JsonValidationException(formatError(position, "意外到达字符串末尾，缺少 ']'"));
         }
         
         if (json.charAt(position) == ']') {
@@ -128,7 +225,7 @@ public class JsonValidator {
             skipWhitespace();
             
             if (position >= length) {
-                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 ']'");
+                throw new JsonValidationException(formatError(position, "意外到达字符串末尾，缺少 ']'"));
             }
             
             if (json.charAt(position) == ']') {
@@ -138,13 +235,13 @@ public class JsonValidator {
                 position++;
                 skipWhitespace();
                 if (position >= length) {
-                    throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 ']'");
+                    throw new JsonValidationException(formatError(position, "意外到达字符串末尾，缺少 ']'"));
                 }
                 if (json.charAt(position) == ']') {
-                    throw new JsonValidationException("在位置 " + position + " 发现尾随逗号");
+                    throw new JsonValidationException(formatError(position, "发现尾随逗号"));
                 }
             } else {
-                throw new JsonValidationException("在位置 " + position + " 期望 ']' 或 ',' 但发现 '" + json.charAt(position) + "'");
+                throw new JsonValidationException(formatErrorWithChar(position, "期望 ']' 或 ','", json.charAt(position)));
             }
         }
     }
@@ -152,7 +249,7 @@ public class JsonValidator {
     private void parseValue() throws JsonValidationException {
         skipWhitespace();
         if (position >= length) {
-            throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾");
+            throw new JsonValidationException(formatError(position, "意外到达字符串末尾，期望值"));
         }
         
         char c = json.charAt(position);
@@ -172,11 +269,12 @@ public class JsonValidator {
         } else if (json.startsWith("null", position)) {
             position += 4;
         } else {
-            throw new JsonValidationException("在位置 " + position + " 发现无效值起始字符: '" + c + "'");
+            throw new JsonValidationException(formatErrorWithChar(position, "发现无效值起始字符", c));
         }
     }
 
     private void parseString() throws JsonValidationException {
+        int stringStartPos = position;
         expectChar('"');
         position++;
         
@@ -194,12 +292,13 @@ public class JsonValidator {
             }
         }
         
-        throw new JsonValidationException("在位置 " + position + " 字符串未闭合");
+        throw new JsonValidationException(formatError(stringStartPos, "字符串未闭合，缺少结束的 '\"'"));
     }
 
     private void parseEscapeSequence() throws JsonValidationException {
+        int escapeStartPos = position - 1;
         if (position >= length) {
-            throw new JsonValidationException("在位置 " + position + " 转义序列未完成");
+            throw new JsonValidationException(formatError(escapeStartPos, "转义序列未完成"));
         }
         
         char c = json.charAt(position);
@@ -219,19 +318,20 @@ public class JsonValidator {
                 parseUnicodeEscape();
                 break;
             default:
-                throw new JsonValidationException("在位置 " + (position - 1) + " 发现无效转义序列: \\" + c);
+                throw new JsonValidationException(formatError(escapeStartPos, "发现无效转义序列: \\" + c));
         }
     }
 
     private void parseUnicodeEscape() throws JsonValidationException {
+        int unicodeStartPos = position - 2;
         if (position + 3 >= length) {
-            throw new JsonValidationException("在位置 " + position + " Unicode转义序列不完整");
+            throw new JsonValidationException(formatError(unicodeStartPos, "Unicode转义序列不完整，需要4个十六进制数字"));
         }
         
         for (int i = 0; i < 4; i++) {
             char c = json.charAt(position + i);
             if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
-                throw new JsonValidationException("在位置 " + (position + i) + " 发现无效Unicode字符: '" + c + "'");
+                throw new JsonValidationException(formatErrorWithChar(position + i, "Unicode转义序列中发现无效字符", c));
             }
         }
         
@@ -239,17 +339,19 @@ public class JsonValidator {
     }
 
     private void parseNumber() throws JsonValidationException {
+        int numberStartPos = position;
+        
         if (json.charAt(position) == '-') {
             position++;
             if (position >= length || !(json.charAt(position) >= '0' && json.charAt(position) <= '9')) {
-                throw new JsonValidationException("在位置 " + (position - 1) + " 减号后缺少数字");
+                throw new JsonValidationException(formatError(numberStartPos, "减号后缺少数字"));
             }
         }
         
         if (json.charAt(position) == '0') {
             position++;
             if (position < length && json.charAt(position) >= '0' && json.charAt(position) <= '9') {
-                throw new JsonValidationException("在位置 " + (position - 1) + " 数字有前导零");
+                throw new JsonValidationException(formatError(numberStartPos, "数字有前导零（不允许：0123，允许：123）"));
             }
         } else {
             while (position < length && json.charAt(position) >= '0' && json.charAt(position) <= '9') {
@@ -260,7 +362,7 @@ public class JsonValidator {
         if (position < length && json.charAt(position) == '.') {
             position++;
             if (position >= length || !(json.charAt(position) >= '0' && json.charAt(position) <= '9')) {
-                throw new JsonValidationException("在位置 " + (position - 1) + " 小数点后缺少数字");
+                throw new JsonValidationException(formatError(numberStartPos, "小数点后缺少数字"));
             }
             while (position < length && json.charAt(position) >= '0' && json.charAt(position) <= '9') {
                 position++;
@@ -273,7 +375,7 @@ public class JsonValidator {
                 position++;
             }
             if (position >= length || !(json.charAt(position) >= '0' && json.charAt(position) <= '9')) {
-                throw new JsonValidationException("在位置 " + (position - 1) + " 指数部分缺少数字");
+                throw new JsonValidationException(formatError(numberStartPos, "指数部分缺少数字"));
             }
             while (position < length && json.charAt(position) >= '0' && json.charAt(position) <= '9') {
                 position++;
@@ -282,9 +384,11 @@ public class JsonValidator {
     }
 
     private void expectChar(char expected) throws JsonValidationException {
-        if (position >= length || json.charAt(position) != expected) {
-            throw new JsonValidationException("在位置 " + position + " 期望 '" + expected + "' 但发现 '" + 
-                (position < length ? json.charAt(position) : "EOF") + "'");
+        if (position >= length) {
+            throw new JsonValidationException(formatError(position, "意外到达字符串末尾，期望 '" + expected + "'"));
+        }
+        if (json.charAt(position) != expected) {
+            throw new JsonValidationException(formatErrorWithChar(position, "期望 '" + expected + "'", json.charAt(position)));
         }
     }
 

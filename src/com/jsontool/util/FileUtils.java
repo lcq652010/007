@@ -8,11 +8,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class FileUtils {
+    private static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
+    private static final byte[] UTF8_BOM = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
 
     public FileReadResult readFile(String filePath) {
         File file = new File(filePath);
@@ -25,26 +28,60 @@ public class FileUtils {
             return new FileReadResult(false, "路径不是文件: " + filePath, null);
         }
 
-        StringBuilder content = new StringBuilder();
+        FileInputStream fis = null;
         BufferedReader reader = null;
         
         try {
-            reader = new BufferedReader(new InputStreamReader(
-                new FileInputStream(file), StandardCharsets.UTF_8));
+            fis = new FileInputStream(file);
             
+            byte[] bomBuffer = new byte[3];
+            int bomRead = fis.read(bomBuffer);
+            boolean hasBom = false;
+            
+            if (bomRead >= 3) {
+                if (bomBuffer[0] == UTF8_BOM[0] && 
+                    bomBuffer[1] == UTF8_BOM[1] && 
+                    bomBuffer[2] == UTF8_BOM[2]) {
+                    hasBom = true;
+                }
+            }
+            
+            fis.close();
+            fis = new FileInputStream(file);
+            
+            if (hasBom) {
+                fis.skip(3);
+            }
+            
+            reader = new BufferedReader(new InputStreamReader(fis, DEFAULT_CHARSET));
+            
+            StringBuilder content = new StringBuilder();
             char[] buffer = new char[4096];
             int read;
             while ((read = reader.read(buffer)) != -1) {
                 content.append(buffer, 0, read);
             }
             
-            return new FileReadResult(true, "读取成功", content.toString());
+            String result = content.toString();
+            
+            if (result.length() > 0 && result.charAt(0) == '\uFEFF') {
+                result = result.substring(1);
+            }
+            
+            return new FileReadResult(true, "读取成功" + (hasBom ? " (已跳过UTF-8 BOM)" : ""), result);
         } catch (IOException e) {
             return new FileReadResult(false, "读取文件失败: " + e.getMessage(), null);
         } finally {
             if (reader != null) {
                 try {
                     reader.close();
+                } catch (IOException e) {
+                    // Ignore
+                }
+            }
+            if (fis != null) {
+                try {
+                    fis.close();
                 } catch (IOException e) {
                     // Ignore
                 }
