@@ -1,0 +1,7 @@
+{
+    "key": "value with \"quoted\" text",
+    "path": "C:\\Users\\test\\file.txt",
+    "multiline": "line1\nline2\nline3",
+    "tabbed": "col1\tcol2\tcol3",
+    "unicode": "test 中文 chars"
+}

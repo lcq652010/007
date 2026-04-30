@@ -61,6 +61,10 @@ public class JsonValidator {
         position++;
         skipWhitespace();
         
+        if (position >= length) {
+            throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 '}'");
+        }
+        
         if (json.charAt(position) == '}') {
             position++;
             return;
@@ -68,13 +72,23 @@ public class JsonValidator {
         
         while (true) {
             skipWhitespace();
+            if (position >= length) {
+                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，期望键名");
+            }
             parseString();
             skipWhitespace();
+            if (position >= length) {
+                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，期望 ':'");
+            }
             expectChar(':');
             position++;
             skipWhitespace();
             parseValue();
             skipWhitespace();
+            
+            if (position >= length) {
+                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 '}'");
+            }
             
             if (json.charAt(position) == '}') {
                 position++;
@@ -82,6 +96,9 @@ public class JsonValidator {
             } else if (json.charAt(position) == ',') {
                 position++;
                 skipWhitespace();
+                if (position >= length) {
+                    throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 '}'");
+                }
                 if (json.charAt(position) == '}') {
                     throw new JsonValidationException("在位置 " + position + " 发现尾随逗号");
                 }
@@ -96,6 +113,10 @@ public class JsonValidator {
         position++;
         skipWhitespace();
         
+        if (position >= length) {
+            throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 ']'");
+        }
+        
         if (json.charAt(position) == ']') {
             position++;
             return;
@@ -106,12 +127,19 @@ public class JsonValidator {
             parseValue();
             skipWhitespace();
             
+            if (position >= length) {
+                throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 ']'");
+            }
+            
             if (json.charAt(position) == ']') {
                 position++;
                 break;
             } else if (json.charAt(position) == ',') {
                 position++;
                 skipWhitespace();
+                if (position >= length) {
+                    throw new JsonValidationException("在位置 " + position + " 意外到达字符串末尾，缺少 ']'");
+                }
                 if (json.charAt(position) == ']') {
                     throw new JsonValidationException("在位置 " + position + " 发现尾随逗号");
                 }
