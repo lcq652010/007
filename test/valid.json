@@ -1,0 +1,1 @@
+{"name":"张三","age":25,"email":"zhangsan@example.com","isActive":true,"tags":["java","json","tool"],"address":{"city":"北京","street":"某某街道123号","zipcode":"100000"},"scores":[{"subject":"数学","score":95},{"subject":"英语","score":88}],"nullValue":null,"numberValue":123.456,"negativeNumber":-789,"scientificNotation":1.23e-10}

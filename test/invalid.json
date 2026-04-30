@@ -1,0 +1,10 @@
+{"name": "张三", "age": 25, "email": "zhangsan@example.com",
+    "isActive": true,  // 这里有个多余的逗号
+    "tags": ["java", "json", "tool",],  // 数组结尾有多余逗号
+    "address": {
+        "city": "北京",
+        "street": "某某街道123号",
+        "zipcode": "100000",  // 对象结尾有多余逗号
+    },
+    "nullValue": null,
+}
